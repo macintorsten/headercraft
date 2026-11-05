@@ -180,18 +180,26 @@ impl Formatter {
         }
 
         // Skip XML prolog if rule preserves it
-        if rule.preserve_xml_prolog && lines[idx].starts_with("<?xml") {
+        if rule.preserve_xml_prolog && idx < lines.len() && lines[idx].starts_with("<?xml") {
             idx += 1;
         }
 
-        // Skip Python / general encoding declarations (PEP 263) on line 0 or 1
-        if idx < lines.len() && idx <= 1 {
-            let lower = lines[idx].to_lowercase();
+        // Skip HTML / XML / SVG DOCTYPE declarations (must remain line 1 / above comments)
+        if idx < lines.len() && lines[idx].trim().to_lowercase().starts_with("<!doctype") {
+            idx += 1;
+        }
+
+        // Skip Python / Ruby / editor directives (PEP 263 coding, frozen_string_literal, Emacs -*- modelines)
+        while idx < lines.len() && idx <= 3 {
+            let lower = lines[idx].trim().to_lowercase();
             if lower.contains("coding=")
                 || lower.contains("coding:")
-                || lower.contains("-*- coding:")
+                || lower.contains("frozen_string_literal:")
+                || (lower.starts_with('#') && lower.contains("-*-"))
             {
                 idx += 1;
+            } else {
+                break;
             }
         }
 
@@ -249,11 +257,12 @@ impl Formatter {
                 for (i, line) in lines[0..max_search].iter().enumerate() {
                     let trimmed = line.trim();
 
-                    // Allow blank lines, shebangs, xml prologs, or build tags before comment
+                    // Allow blank lines, shebangs, xml prologs, doctypes, or build tags before comment
                     if !in_block
                         && (trimmed.is_empty()
                             || trimmed.starts_with("#!")
                             || trimmed.starts_with("<?xml")
+                            || trimmed.to_lowercase().starts_with("<!doctype")
                             || trimmed.starts_with("//go:build")
                             || trimmed.starts_with("// +build"))
                     {
@@ -288,11 +297,13 @@ impl Formatter {
                 for (i, line) in lines[0..max_search].iter().enumerate() {
                     let trimmed = line.trim();
 
-                    // Allow blank lines, shebangs, or encoding cookies before comment
+                    // Allow blank lines, shebangs, encoding cookies, frozen_string_literal, or modelines before comment
                     if !in_comment
                         && (trimmed.is_empty()
                             || (i == 0 && trimmed.starts_with("#!"))
-                            || trimmed.to_lowercase().contains("coding"))
+                            || trimmed.to_lowercase().contains("coding")
+                            || trimmed.to_lowercase().contains("frozen_string_literal")
+                            || (trimmed.starts_with('#') && trimmed.contains("-*-")))
                     {
                         continue;
                     }
@@ -627,6 +638,52 @@ mod tests {
                 assert_eq!(new_content, missing_script);
             }
             _ => panic!("Expected Changed for missing usage header"),
+        }
+    }
+
+    #[test]
+    fn test_html_doctype_preservation() {
+        let rules = default_language_rules();
+        let xml_rule = rules.iter().find(|r| r.name == "xml_block").unwrap();
+        let config = Config::default();
+
+        let initial = "<!DOCTYPE html>\n<html>\n<body>Hello</body>\n</html>\n";
+        let res =
+            Formatter::format_file(Path::new("index.html"), initial, xml_rule, &config).unwrap();
+
+        match res {
+            FormatResult::Changed { new_content, .. } => {
+                let lines: Vec<&str> = new_content.lines().collect();
+                assert_eq!(lines[0], "<!DOCTYPE html>");
+                assert_eq!(lines[1], "<!--");
+                assert!(lines[2].contains("Copyright (c)"));
+                assert_eq!(lines[3], "-->");
+                assert!(new_content.contains("<html>"));
+            }
+            _ => panic!("Expected Changed for html doctype"),
+        }
+    }
+
+    #[test]
+    fn test_ruby_frozen_string_literal_preservation() {
+        let rules = default_language_rules();
+        let py_rule = rules.iter().find(|r| r.name == "hash_line").unwrap();
+        let config = Config::default();
+
+        let initial =
+            "#!/usr/bin/env ruby\n# frozen_string_literal: true\n\ndef hello\n  puts 1\nend\n";
+        let res =
+            Formatter::format_file(Path::new("app.rb"), initial, py_rule, &config).unwrap();
+
+        match res {
+            FormatResult::Changed { new_content, .. } => {
+                let lines: Vec<&str> = new_content.lines().collect();
+                assert_eq!(lines[0], "#!/usr/bin/env ruby");
+                assert_eq!(lines[1], "# frozen_string_literal: true");
+                assert!(lines[2].starts_with("# Copyright (c)"));
+                assert!(new_content.contains("def hello"));
+            }
+            _ => panic!("Expected Changed for ruby frozen string literal"),
         }
     }
 }
