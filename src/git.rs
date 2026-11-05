@@ -32,14 +32,13 @@ pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
         .map(|out| !out.stdout.is_empty())
         .unwrap_or(false);
 
-    // Get creation year (first commit date)
+    // Get creation year (first commit date where file was added, or oldest commit)
     let created_year = Command::new("git")
         .args([
             "log",
-            "--follow",
+            "--diff-filter=A",
             "--format=%ad",
             "--date=format:%Y",
-            "--reverse",
             "-1",
             "--",
             file_path.to_str().unwrap_or(""),
@@ -47,13 +46,33 @@ pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
         .output()
         .ok()
         .and_then(|out| {
-            if out.status.success() {
+            if out.status.success() && !out.stdout.is_empty() {
                 String::from_utf8(out.stdout)
                     .ok()
                     .and_then(|s| s.trim().parse::<u32>().ok())
             } else {
                 None
             }
+        })
+        .or_else(|| {
+            Command::new("git")
+                .args([
+                    "log",
+                    "--format=%ad",
+                    "--date=format:%Y",
+                    "--",
+                    file_path.to_str().unwrap_or(""),
+                ])
+                .output()
+                .ok()
+                .and_then(|out| {
+                    if out.status.success() {
+                        let text = String::from_utf8_lossy(&out.stdout);
+                        text.lines().last().and_then(|l| l.trim().parse::<u32>().ok())
+                    } else {
+                        None
+                    }
+                })
         });
 
     // Get modified year
