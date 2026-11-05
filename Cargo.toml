@@ -2,7 +2,7 @@
 
 [package]
 name = "headercraft"
-version = "0.1.0"
+version = "0.1.1"
 edition = "2021"
 authors = ["Markus Johansson"]
 description = "High-performance file preamble validator, metadata linter, and header formatter in Rust"
