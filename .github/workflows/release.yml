@@ -12,18 +12,21 @@ permissions:
 jobs:
   build-release:
     name: Build (${{ matrix.target }})
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os || 'ubuntu-latest' }}
     strategy:
       fail-fast: false
       matrix:
         include:
           - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
             use_cross: false
             install_musl: true
           - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
             use_cross: false
             install_musl: false
           - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
             use_cross: true
             install_musl: false
     steps:
