@@ -1,0 +1,11 @@
+amends "package://github.com/jdx/hk/releases/download/v2.11.1/hk@2.11.1#/Config.pkl"
+
+steps {
+  ["headers"] = new Step {
+    check = "headercraft check --format gcc --config headercraft.toml before/"
+    fix = "headercraft fix --config headercraft.toml before/"
+    check_diff = "headercraft diff --config headercraft.toml before/"
+    diagnostic_format = "gcc"
+    diagnostic_tool = "headercraft"
+  }
+}

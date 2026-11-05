@@ -6,6 +6,42 @@ It clones [**`fatih/color`**](https://github.com/fatih/color) (a popular Go repo
 
 ---
 
+## Visual Comparison (Before & After)
+
+```go
+// BEFORE (color.go - committed in 2014, no header):
+package color
+
+import (
+    "fmt"
+    ...
+)
+
+// AFTER (Inception year 2014 resolved from git commit history):
+// Copyright (c) 2014-2026 Fatih Arslan and Color Contributors.
+// SPDX-License-Identifier: MIT
+
+package color
+
+import (
+    "fmt"
+    ...
+)
+```
+
+```go
+// BEFORE (color_windows.go - committed later in 2023, no header):
+package color
+
+// AFTER (Inception year 2023 resolved from git commit history):
+// Copyright (c) 2023-2026 Fatih Arslan and Color Contributors.
+// SPDX-License-Identifier: MIT
+
+package color
+```
+
+---
+
 ## What This Demonstrates
 
 1. **Dynamic Git Timestamp Resolution**:

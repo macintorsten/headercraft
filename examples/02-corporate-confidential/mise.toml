@@ -1,0 +1,14 @@
+[tools]
+hk = "latest"
+
+[tasks.check]
+description = "Check file headers using hk"
+run = "hk check --all"
+
+[tasks.diff]
+description = "Preview unified diff of header updates"
+run = "headercraft diff --config headercraft.toml before/"
+
+[tasks.fix]
+description = "Auto-fix file headers in-place"
+run = "headercraft fix --config headercraft.toml before/"

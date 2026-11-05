@@ -1,21 +1,83 @@
-# Example 6: Synchronizing Script Headers with CLI `--help` Output
+# Example 06: Synchronizing Script Headers with CLI `--help` Output
 
 Automatically maintain and synchronize in-code usage comments with the actual runtime output of `bash <file> --help` or `-h`.
 
-## The Problem
-Shell scripts, CLI utilities, and automation scripts often contain comment headers describing how to invoke them. Over time, developers add flags or alter parameters inside the script's `--help` implementation but forget to update the top-of-file comments. This causes documentation drift and confuses users reading the source.
+---
 
-## The HeaderCraft Solution
-With HeaderCraft's `[commands]` engine and `{file}` placeholder:
-1. **Dynamic Execution:** HeaderCraft executes `bash {file} --help` against each target script and captures its output into `cmd.help`.
-2. **Comment Formatting:** Wraps the multi-line help output into clean `# ` comments placed directly under the `#!/bin/bash` shebang.
-3. **Drift Detection:** `hdr check` detects if in-code comments no longer match the real `--help` output.
-4. **Auto-Fix:** `hdr fix` updates or inserts the latest usage instructions in milliseconds.
+## Visual Comparison (Before & After)
 
-## Configuration (`headercraft.toml`)
+### 1. Bootstrapping Missing Usage (`backup.sh`)
+
+```bash
+# BEFORE (No usage documentation):
+#!/bin/bash
+set -euo pipefail
+
+if [ "${1:-}" = "--help" ] || [ "${1:-}" = "-h" ]; then
+    cat <<'EOF'
+backup.sh - Snapshot local database and object store
+
+Usage:
+  backup.sh [flags]
+
+Flags:
+  --target <dir>     Backup destination directory (default: /var/backups)
+  --compress         Enable gzip compression
+  -h, --help         Show this help message
+EOF
+    exit 0
+fi
+
+# AFTER (HeaderCraft ran `bash backup.sh --help` and inserted the synopsis):
+#!/bin/bash
+# Synopsis & Usage:
+# backup.sh - Snapshot local database and object store
+# 
+# Usage:
+#   backup.sh [flags]
+# 
+# Flags:
+#   --target <dir>     Backup destination directory (default: /var/backups)
+#   --compress         Enable gzip compression
+#   -h, --help         Show this help message
+
+set -euo pipefail
+```
+
+### 2. Auto-Fixing Drifted Flags (`deploy.sh`)
+
+```bash
+# BEFORE (Header was missing newer flags --dry-run and --tag):
+#!/bin/bash
+# Synopsis & Usage:
+# deploy.sh - Deploy artifact to cloud environments
+# Usage:
+#   deploy.sh --env <staging|prod>
+
+# AFTER (Updated to match current CLI flags):
+#!/bin/bash
+# Synopsis & Usage:
+# deploy.sh - Deploy artifact to cloud environments
+# 
+# Usage:
+#   deploy.sh [flags]
+# 
+# Flags:
+#   --env <name>       Target environment (staging or production)
+#   --dry-run          Preview changes without deploying
+#   --tag <version>    Release tag to deploy
+#   -h, --help         Show this help message
+```
+
+---
+
+## How It Works
+
+### Configuration (`headercraft.toml`)
 ```toml
 [commands]
 # Runs the script with --help to obtain the canonical synopsis
+# Uses caching so static commands run once, while {file} commands run per script
 help = "bash {file} --help"
 
 [[rules]]
@@ -30,20 +92,42 @@ Synopsis & Usage:
 keywords = ["Synopsis & Usage:"]
 ```
 
-## Running the Demo
-Run the automated end-to-end walkthrough script:
+### Strict Sync vs. Drift-Tolerant Check
+- **Strict Sync (Default)**: Any difference between the comment and `--help` triggers `hdr check` failure and is auto-corrected by `hdr fix`.
+- **Drift-Tolerant Check**: To enforce presence without overwriting custom notes, remove the `template` and use `fixable = false`:
+  ```toml
+  [[rules]]
+  name = "require_usage"
+  fixable = false
+  keywords = ["Usage:"]
+  ```
+
+---
+
+## Try It
+
+### Option A: Via `hk` and `mise` (One-Liner)
+```bash
+# Check script header compliance
+mise exec hk@latest -- hk check --all
+
+# Auto-fix in-place
+mise run fix
+```
+
+### Option B: Standalone Automated Walkthrough
 ```bash
 ./run-demo.sh
 ```
 
-Or run individual commands:
+### Option C: Standalone CLI
 ```bash
-# 1. Preview how backup.sh and deploy.sh will be updated
+# 1. Preview changes as unified diff
 headercraft diff --config headercraft.toml before/
 
 # 2. Fix scripts in-place
 headercraft fix --config headercraft.toml before/
 
-# 3. Verify all scripts pass check
+# 3. Verify all scripts now pass check
 headercraft check --config headercraft.toml before/
 ```

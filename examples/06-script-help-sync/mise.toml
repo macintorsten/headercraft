@@ -1,0 +1,14 @@
+[tools]
+hk = "latest"
+
+[tasks.check]
+description = "Check script headers using hk"
+run = "hk check --all"
+
+[tasks.diff]
+description = "Preview unified diff of help synopsis updates"
+run = "headercraft diff --config headercraft.toml before/"
+
+[tasks.fix]
+description = "Auto-fix script headers in-place from --help"
+run = "headercraft fix --config headercraft.toml before/"
