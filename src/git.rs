@@ -2,7 +2,6 @@
  * Copyright (c) 2026 Acme Corp. All rights reserved.
  */
 
-use chrono::Datelike;
 use std::path::Path;
 use std::process::Command;
 
@@ -11,14 +10,13 @@ pub struct GitMetadata {
     pub created_year: Option<u32>,
     pub modified_year: Option<u32>,
     pub author_name: Option<String>,
+    pub is_dirty: bool,
 }
 
 pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
     if !enabled {
         return GitMetadata::default();
     }
-
-    let current_year = chrono::Utc::now().year() as u32;
 
     // Check if the file has uncommitted changes in git worktree
     let is_dirty = Command::new("git")
@@ -75,33 +73,29 @@ pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
                 })
         });
 
-    // Get modified year
-    let modified_year = if is_dirty {
-        Some(current_year)
-    } else {
-        Command::new("git")
-            .args([
-                "log",
-                "--follow",
-                "--format=%ad",
-                "--date=format:%Y",
-                "-1",
-                "--",
-                file_path.to_str().unwrap_or(""),
-            ])
-            .output()
-            .ok()
-            .and_then(|out| {
-                if out.status.success() {
-                    String::from_utf8(out.stdout)
-                        .ok()
-                        .and_then(|s| s.trim().parse::<u32>().ok())
-                } else {
-                    None
-                }
-            })
-            .or(created_year)
-    };
+    // Get modified year (last commit year)
+    let modified_year = Command::new("git")
+        .args([
+            "log",
+            "--follow",
+            "--format=%ad",
+            "--date=format:%Y",
+            "-1",
+            "--",
+            file_path.to_str().unwrap_or(""),
+        ])
+        .output()
+        .ok()
+        .and_then(|out| {
+            if out.status.success() {
+                String::from_utf8(out.stdout)
+                    .ok()
+                    .and_then(|s| s.trim().parse::<u32>().ok())
+            } else {
+                None
+            }
+        })
+        .or(created_year);
 
     // Get initial author
     let author_name = Command::new("git")
@@ -133,5 +127,6 @@ pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
         created_year,
         modified_year,
         author_name,
+        is_dirty,
     }
 }

@@ -55,10 +55,12 @@ impl Extractor {
         }
         if let Some(y) = git_meta.modified_year {
             git_map.insert("modified_year".to_string(), json!(y));
+            git_map.insert("last_commit_year".to_string(), json!(y));
         }
         if let Some(a) = git_meta.author_name {
             git_map.insert("author".to_string(), json!(a));
         }
+        git_map.insert("is_dirty".to_string(), json!(git_meta.is_dirty));
 
         let mut fs_map = serde_json::Map::new();
         fs_map.insert("filename".to_string(), json!(filename));
