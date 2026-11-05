@@ -182,10 +182,14 @@ Browse complete configurations and before/after fixtures in the [`examples/`](ex
 ## Installation
 
 ### Via `mise` (from GitHub Releases)
-Add to your `mise.toml` to fetch pre-compiled binaries via `ubi`:
+Add to your `mise.toml` to automatically fetch pre-compiled binaries:
 ```toml
 [tools]
-"ubi:macintorsten/headercraft" = "latest"
+"github:macintorsten/headercraft" = "latest"
+```
+Or run directly without installing:
+```bash
+mise exec github:macintorsten/headercraft@latest -- hdr check
 ```
 
 ### From Git (Cargo)
