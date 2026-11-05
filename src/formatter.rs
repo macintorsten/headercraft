@@ -672,8 +672,7 @@ mod tests {
 
         let initial =
             "#!/usr/bin/env ruby\n# frozen_string_literal: true\n\ndef hello\n  puts 1\nend\n";
-        let res =
-            Formatter::format_file(Path::new("app.rb"), initial, py_rule, &config).unwrap();
+        let res = Formatter::format_file(Path::new("app.rb"), initial, py_rule, &config).unwrap();
 
         match res {
             FormatResult::Changed { new_content, .. } => {
