@@ -5,254 +5,82 @@
 [![Rust: 2021](https://img.shields.io/badge/Rust-2021_Edition-orange.svg)](https://www.rust-lang.org)
 [![Hook: hk compatible](https://img.shields.io/badge/Hook-hk_compatible-brightgreen.svg)](https://github.com/jdx/hk)
 
-A high-performance, pluggable file header scanner, validator, and formatter written in **Rust**, designed for sub-5ms pre-commit execution and native integration with [`hk`](https://github.com/jdx/hk) and [`mise`](https://mise.jdx.dev).
+**HeaderCraft** is a blazing-fast (<5ms), pluggable license and copyright header manager written in Rust.
+
+It checks, formats, and enforces top-of-file headers in Git repositories and pre-commit hooks. It resolves original inception years from Git history or existing headers, updates current year ranges dynamically, and protects language preambles (shebangs `#!`, XML prologs, and Go build tags).
+
+```go
+// Before:
+package main
+
+// After:
+// Copyright (c) 2014-2026 Acme Corp.
+// SPDX-License-Identifier: MIT
+
+package main
+```
 
 ---
 
-## Features
-
-- ⚡ **Sub-5ms Execution:** Compiles to a single zero-overhead native static binary.
-- 🔍 **Regex Capture Extraction:** Extracts metadata (inception year, author, owner) from existing file headers and reuses them when updating headers.
-- 📅 **Automatic Year Range Updating:** Inception year is preserved or resolved from Git history, while the ending year dynamically updates to the current year (e.g. `2018-2026`).
-- 🧩 **Multi-Source Template Context:** MiniJinja template engine with access to:
-  - `vars.*`: Variables captured from the file's existing header via named regex groups.
-  - `git.*`: First commit year (`git.created_year`), last commit year (`git.modified_year`), author (`git.author`), and dirty state (`git.is_dirty`).
-  - `fs.*`: Filesystem attributes (`filename`, `stem`, `extension`, `dir`, `mtime_year`).
-  - `now.*`: Current year (`now.year`), date (`now.date`), and ISO timestamp.
-  - `props.*`: Static properties defined in `headercraft.toml`.
-  - `cmd.*`: Dynamic outputs from external shell commands defined in `[commands]`.
-- 🛡️ **Intelligent Placement:**
-  - Preserves shebangs (`#!/usr/bin/env python3`) on Line 1.
-  - Preserves XML prologs (`<?xml version="1.0" ...?>`) on Line 1.
-  - Preserves Python encoding comments (`# -*- coding: utf-8 -*-`).
-  - Preserves Go build constraints (`//go:build` and legacy `// +build`).
-  - Protects internal non-header comments (e.g. comments inside methods or after imports).
-  - Preserves native CRLF (`\r\n`) line endings on Windows.
-- 🔌 **Native `hk` Integration:** First-class support for `hk` pre-commit hooks via standard GCC diagnostic output (`--format gcc`), unified patch diffs (`headercraft diff`), and automatic fixes (`headercraft fix`).
-
----
-
-## How It Works
-
-HeaderCraft operates as a deterministic pipeline combining multi-source metadata extraction, preamble preservation, and comment formatting.
-
-### 1. Architectural Overview
+## How It Works at a Glance
 
 ```mermaid
-graph TD
-    subgraph Sources [Variable Sources]
-        V["vars.* (Existing Header Regex)"]
-        G["git.* (Inception & Modified Commits)"]
-        F["fs.* (Path, Extension, Mtime)"]
-        N["now.* (Current Year & Timestamp)"]
-        P["props.* (Static Configuration)"]
-        C["cmd.* (External Commands)"]
-    end
-
-    subgraph Engine [HeaderCraft Core]
-        CF[Classifier] --> R[Language Rule]
-        Sources --> E[Extractor]
-        E --> MJ[MiniJinja Template Engine]
-        R --> CW[Comment Wrapper]
-        MJ --> CW
-        CW --> Formatter[Header Formatter]
-    end
-
-    subgraph Operations [Operating Modes]
-        Formatter --> Check["check (Verify & GCC/SARIF Diagnostics)"]
-        Formatter --> Diff["diff (Unified Patch Preview)"]
-        Formatter --> Fix["fix (In-Place Auto-Fix)"]
-    end
+flowchart LR
+    A[Source File] --> B[HeaderCraft Engine]
+    M[(Git Commits + Existing Headers)] --> B
+    B --> C{Mode}
+    C -->|check| D[Verify Headers & GCC/SARIF Output]
+    C -->|diff| E[Unified Diff Preview]
+    C -->|fix| F[In-Place Auto-Fix]
 ```
 
-### 2. Header Detection & Lifecycle Flowchart
-
-```mermaid
-flowchart TD
-    Start([Input File]) --> Preamble[Scan Leading Directives]
-    Preamble --> CheckDirectives{Preamble Present?}
-    CheckDirectives -- Yes --> Preserve[Preserve Shebang / XML / Go Tags]
-    CheckDirectives -- No --> ScanComments[Scan First ~40 Lines for Comments]
-    Preserve --> ScanComments
-
-    ScanComments --> KeywordMatch{Comment contains<br/>copyright, license, or spdx?}
-    KeywordMatch -- Yes --> HasHeader[Existing Header Found]
-    KeywordMatch -- No --> NoHeader[No Header Found]
-
-    HasHeader --> ExtractVars[Extract regex capture groups to vars.*]
-    ExtractVars --> RenderReplace[Render Canonical Template]
-    RenderReplace --> Replace[Replace Existing Header In-Place]
-
-    NoHeader --> RenderInsert[Render Canonical Template from Git/Now/Props]
-    RenderInsert --> Insert[Insert Header after Preambles]
-
-    Replace --> Compare{new_content == original?}
-    Insert --> Compare
-
-    Compare -- "Identical (Clean)" --> Clean[Exit 0 / All Valid]
-    Compare -- "Different (Violation)" --> ModeBranch{Mode?}
-
-    ModeBranch -- "check" --> Fail[Emit GCC/SARIF Diagnostics<br/>Exit 1]
-    ModeBranch -- "diff" --> ShowDiff[Emit Unified Diff<br/>Exit 1]
-    ModeBranch -- "fix" --> WriteFile[Write to disk in-place<br/>Exit 0]
-
-    WriteFile --> Idempotent([Next 'check' is 100% Idempotent])
-```
-
-### 3. Variable Inception Precedence
-
-When updating copyright year ranges, HeaderCraft follows a strict 3-tier precedence hierarchy:
-
-```text
-1. Existing Header (vars.start_year)
-   └─► If the file already has 'Copyright 2012 Acme', 2012 is preserved.
-       (Protects original authorship even if git history was rewritten or truncated)
-
-2. Git Commit History (git.created_year)
-   └─► If no header exists, HeaderCraft queries the initial commit timestamp via:
-       git log --diff-filter=A --format=%ad --date=format:%Y -1 -- <file>
-
-3. Current Year (now.year)
-   └─► If the file is untracked or Git is disabled, falls back to wall-clock year.
-```
-
-Template example:
-```jinja
-{% set start = vars.start_year | default(git.created_year | default(now.year)) -%}
-Copyright (c) {{ start }}{% if start != now.year %}-{{ now.year }}{% endif %} {{ props.owner }}.
-```
-
----
-
-## Operating Modes
-
-HeaderCraft provides three complementary commands:
-
-| Command | Purpose | Output | Exit Code |
-|---|---|---|---|
-| `headercraft check` | Linting & CI verification | GCC diagnostic lines (`--format gcc`), SARIF (`--format sarif`), or human summary | `0` = all valid, `1` = violations found |
-| `headercraft diff` | Patch generation & code review | Standard unified diff (`--- a/` `+++ b/`) | `0` = no diff, `1` = diff exists |
-| `headercraft fix` | Automated formatting | In-place file modification | `0` = success |
-
-### Native Pre-Commit Hook Sequencing with `hk`
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Dev as Developer
-    participant Git as Git (Pre-Commit)
-    participant HK as hk Hook Runner
-    participant HDR as HeaderCraft (hdr)
-
-    Dev->>Git: git commit
-    Git->>HK: Triggers hk pre-commit hook
-    HK->>HDR: headercraft check --format gcc {{staged_files}}
-    alt All headers compliant
-        HDR-->>HK: Exit 0 (All Clean)
-        HK-->>Git: Allow commit
-        Git-->>Dev: Commit succeeded!
-    else Header missing or outdated
-        HDR-->>HK: Exit 1 (file:1:1: error: Missing or outdated file header)
-        alt check_diff configured in hk.pkl
-            HK->>HDR: headercraft diff {{staged_files}}
-            HDR-->>HK: Returns unified diff patch
-            HK->>Git: Automatically applies patch & re-stages file
-            HK-->>Git: Allow commit with compliant headers
-            Git-->>Dev: Commit succeeded with fixed headers!
-        else Strict rejection mode
-            HK-->>Git: Abort commit
-            Git-->>Dev: Commit rejected (Run 'hk fix' or 'hdr fix')
-        end
-    end
-```
-
----
-
-## Startup & Language Benchmarks
-
-Pre-commit hooks require near-instantaneous feedback. Here is how HeaderCraft compares across runtime environments:
-
-| Implementation | Runtime / Binary | Cold Startup | Warm / Hook Run | Dependencies |
-|---|---|---|---|---|
-| **HeaderCraft (Rust)** | Native Binary | **~2–4 ms** | **~2–4 ms** | **Zero runtime dependencies** |
-| Go Alternative | Native Binary | ~3–5 ms | ~3–5 ms | Zero runtime dependencies |
-| Python (`python3`) | CPython 3.12 | ~18–25 ms | ~15–20 ms | Requires Python runtime |
-| Python (`uvx`) | uv cache runner | ~120 ms (cold) | ~40 ms (cached) | Requires `uv` toolchain |
-| Java (Standard HotSpot) | OpenJDK 25 | ~380 ms | ~380 ms | Requires JRE |
-| Java (Leyden AOT Cache) | OpenJDK 25 AOT | ~35 ms | ~35 ms | Requires JDK 25 Leyden cache |
-
----
-
-## Installation
-
-### Via `mise`
-Add HeaderCraft to your `mise.toml`:
-```toml
-[tools]
-"cargo:headercraft" = "latest"
-# Or from GitHub release once published:
-# "github:your-org/headercraft" = "latest"
-```
-
-### From Source
-```bash
-cargo install --path .
-```
+### 3-Tier Date Resolution
+When generating year ranges (e.g. `2018-2026`), HeaderCraft avoids manual date maintenance:
+1. **Existing Header** (`vars.start_year`): Preserves original author year from current file comments.
+2. **Git History** (`git.created_year`): Looks up initial commit year if no header exists.
+3. **Current Year** (`now.year`): Uses wall-clock year if untracked.
 
 ---
 
 ## Quick Start
 
-Initialize a default `headercraft.toml` configuration:
 ```bash
-headercraft init
-```
+# 1. Initialize starter configuration
+hdr init
 
-Check files for header compliance:
-```bash
-# Human readable output
-headercraft check
+# 2. Check files (exits 0 if valid, 1 if missing/outdated)
+hdr check
 
-# GCC format for hk / linters
-headercraft check --format gcc
+# 3. Preview changes as unified diff
+hdr diff
 
-# SARIF output for GitHub Code Scanning
-headercraft check --format sarif
-```
-
-Preview changes as a unified diff:
-```bash
-headercraft diff
-```
-
-Apply headers in place:
-```bash
-headercraft fix
+# 4. Fix headers in-place
+hdr fix
 ```
 
 ---
 
-### Template Variables Reference
+## Integration with `hk` Pre-Commit Hook
 
-Templates have access to five distinct variable namespaces in MiniJinja:
+HeaderCraft is designed for seamless, sub-second execution with [`hk`](https://github.com/jdx/hk):
 
-| Namespace | Variable | Type | Description |
-|---|---|---|---|
-| **`vars.*`** | `vars.<name>` | `string` | Named capture groups from `extract_regex` (e.g. `vars.start_year`, `vars.owner`). Highest precedence. |
-| **`git.*`** | `git.created_year` | `integer` | First commit year where file was added (`git log --diff-filter=A`). |
-| | `git.modified_year` | `integer` | Last commit year for the file (`git log -1`). |
-| | `git.author` | `string` | Initial committing author name. |
-| | `git.is_dirty` | `boolean` | `true` if file has uncommitted changes in working tree / index. |
-| **`fs.*`** | `fs.filename` | `string` | Full filename including extension (e.g. `main.rs`). |
-| | `fs.stem` | `string` | Filename without extension (e.g. `main`). |
-| | `fs.extension` | `string` | File extension without dot (e.g. `rs`). |
-| | `fs.dir` | `string` | Parent directory path. |
-| | `fs.mtime_year` | `integer` | Filesystem modification year. |
-| **`now.*`** | `now.year` | `integer` | Current wall-clock year (e.g. `2026`). |
-| | `now.date` | `string` | Current date formatted as `YYYY-MM-DD`. |
-| | `now.iso` | `string` | RFC-3339 timestamp. |
-| **`props.*`** | `props.<key>` | `any` | User-defined properties configured under `[props]` in `headercraft.toml`. |
-| **`cmd.*`** | `cmd.<name>` | `string` | Stdout output from external commands configured under `[commands]` in `headercraft.toml`. |
+```pkl
+amends "package://github.com/jdx/hk/releases/download/v2.11.0/hk@2.11.0#/Config.pkl"
+
+steps {
+  ["headers"] = new Step {
+    glob = "**/*.{rs,go,py,java,ts,c,xml,sh}"
+    exclude = List("target/**", "vendor/**")
+    check = "headercraft check --format gcc {{files}}"
+    fix = "headercraft fix {{files}}"
+    check_diff = "headercraft diff {{files}}"
+    diagnostic_format = "gcc"
+    diagnostic_tool = "headercraft"
+  }
+}
+```
+
+In pre-commit, `hk` checks staged files in ~2ms. If headers are missing or outdated, it can either reject the commit with clean diagnostics or auto-fix them on the fly.
 
 ---
 
@@ -260,147 +88,85 @@ Templates have access to five distinct variable namespaces in MiniJinja:
 
 ```toml
 [header]
-# Global MiniJinja template for canonical headers
+# MiniJinja template: inception year is preserved, end year updates to current year
 template = """
-{% set start_year = vars.start_year | default(git.created_year | default(now.year)) -%}
-Copyright (c) {{ start_year }}{% if start_year | string != now.year | string %}-{{ now.year }}{% endif %} {{ vars.owner | default(props.owner) | default('Acme Corp') }}. All rights reserved.
+{% set start = vars.start_year | default(git.created_year | default(now.year)) -%}
+Copyright (c) {{ start }}{% if start != now.year %}-{{ now.year }}{% endif %} {{ props.owner }}.
+SPDX-License-Identifier: {{ props.license }}
 """
 
-# Named regex capture groups extract existing metadata to reuse in template
+# Extract existing year & author from files to avoid overwriting original dates
 extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
-
-# Header detection keywords (matches any comment containing these words)
-keywords = ["copyright", "license", "spdx"]
 
 [props]
 owner = "Acme Corp"
 license = "Apache-2.0"
-
-# Dynamic external commands: results become available as {{ cmd.<name> }}
-[commands]
-git_branch = "git branch --show-current"
-user = "whoami"
 
 [git]
 enabled = true
 
 [files]
 includes = ["**/*"]
-excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
+excludes = ["target/**", "node_modules/**"]
 
-# Retain built-in rules for standard languages (C, Java, Python, Shell, XML, etc.)
+# Retain built-in rules for C, Java, Python, Shell, XML, SQL, etc.
 inherit_default_rules = true
 
-# Pluggable Language Rules (custom languages or overrides)
+# Pluggable custom rules (add unknown formats easily)
 [[rules]]
-name = "elixir"
-extensions = ["ex", "exs"]
-style = "line"            # "line" or "block"
-comment_prefix = "# "
-
-[[rules]]
-name = "custom_sql"
-extensions = ["sql"]
-style = "line"
-comment_prefix = "-- "
-# Optional per-rule template override (overrides [header].template for this rule)
-template = "-- PROPRIETARY DATABASE SCHEMA -- DO NOT REPLICATE"
-```
-
-### Supporting Unknown File Formats
-
-HeaderCraft can support **any** unknown file format purely through configuration without recompiling:
-
-```toml
-[[rules]]
-name = "protocol_buffers"
-extensions = ["proto"]
-style = "line"
+name = "custom_lang"
+extensions = ["xyz"]
+style = "line"          # "line" or "block"
 comment_prefix = "// "
-
-[[rules]]
-name = "ninja_build"
-filenames = ["build.ninja"]
-style = "line"
-comment_prefix = "# "
-
-[[rules]]
-name = "custom_scripts"
-content_patterns = ["^# syntax=myscript.*"]
-style = "line"
-comment_prefix = "# "
 ```
 
 ---
 
-## Integration with `hk`
+## Template Variables Reference
 
-Configure `hk.pkl` to run HeaderCraft natively in your git hooks:
-
-```pkl
-amends "package://github.com/jdx/hk/releases/download/v2.11.0/hk@2.11.0#/Config.pkl"
-
-steps {
-  ["headers"] = new Step {
-    glob = "**/*.{rs,py,java,c,cpp,xml,sh,toml}"
-    exclude = List("Cargo.lock", "target/**")
-    check = "headercraft check --format gcc {{files}}"
-    check_diff = "headercraft diff {{files}}"
-    fix = "headercraft fix {{files}}"
-    diagnostic_format = "gcc"
-    diagnostic_tool = "headercraft"
-  }
-}
-```
-
-When violations occur, `hk` reports clean diagnostics:
-```text
-❯ headers
-  headers – Test.java:1:1: error: Missing or outdated file header [headercraft]
-hk ERROR To fix, run: headercraft fix Test.java
-```
+| Namespace | Variable | Type | Description |
+|---|---|---|---|
+| **`vars.*`** | `vars.<name>` | `string` | Captured from existing header via `extract_regex` (e.g. `vars.start_year`, `vars.owner`). |
+| **`git.*`** | `git.created_year` | `integer` | First commit year where file was added. |
+| | `git.modified_year` | `integer` | Last commit year for the file. |
+| | `git.author` | `string` | Initial commit author name. |
+| | `git.is_dirty` | `boolean` | `true` if file has uncommitted changes in git. |
+| **`fs.*`** | `fs.filename` | `string` | Full filename (e.g. `main.go`). |
+| | `fs.extension` | `string` | File extension without dot (e.g. `go`). |
+| **`now.*`** | `now.year` | `integer` | Current wall-clock year (`2026`). |
+| | `now.date` | `string` | Current date (`YYYY-MM-DD`). |
+| **`props.*`** | `props.<key>` | `any` | Static values configured under `[props]`. |
+| **`cmd.*`** | `cmd.<name>` | `string` | Output from external commands in `[commands]`. |
 
 ---
 
-## Running with `mise`
+## Interactive Examples
 
-Add tasks to your `mise.toml`:
+Run and test real scenarios in the [`examples/`](examples/) directory:
 
+- [**01-spdx-migration**](examples/01-spdx-migration/): Migrating legacy verbose boilerplate to compact SPDX tags.
+- [**02-corporate-confidential**](examples/02-corporate-confidential/): Proprietary security classification banners with XML prolog handling.
+- [**03-generated-code**](examples/03-generated-code/): Deterministic `@generated - DO NOT EDIT` provenance notices.
+- [**04-dual-licensing**](examples/04-dual-licensing/): Dual Apache-2.0 / MIT licensing notices.
+- [**05-git-pre-commit-hook**](examples/05-git-pre-commit-hook/): Live clone of `fatih/color` with full `hk` pre-commit hook walkthrough.
+
+---
+
+## Installation
+
+### Via `mise`
 ```toml
 [tools]
-rust = "stable"
-hk = "2.11.0"
-
-[tasks.build]
-description = "Build headercraft in release mode"
-run = "cargo build --release"
-
-[tasks.test]
-description = "Run test suite"
-run = "cargo test"
-
-[tasks.check]
-description = "Run formatting, linter, and tests"
-run = "cargo fmt -- --check && cargo clippy --all-targets -- -D warnings && cargo test"
-
-[tasks.pre-commit]
-description = "Run pre-commit hook via hk"
-run = "hk run pre-commit"
+"cargo:headercraft" = "latest"
 ```
 
----
+### From Binary Releases
+Pre-compiled static binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows are available on GitHub Releases.
 
-## Interactive Examples & Scenarios
-
-The repository includes five ready-to-test scenarios under [`examples/`](examples/):
-
-| Scenario | Directory | Focus Area |
-|---|---|---|
-| **SPDX Migration** | [`examples/01-spdx-migration/`](examples/01-spdx-migration/) | Migrating legacy verbose copyright boilerplate to compact SPDX tags |
-| **Corporate Confidentiality** | [`examples/02-corporate-confidential/`](examples/02-corporate-confidential/) | Enforcing proprietary security classification banners and XML prolog handling |
-| **Generated Code Stamping** | [`examples/03-generated-code/`](examples/03-generated-code/) | Deterministic `@generated - DO NOT EDIT` provenance without timestamp churn |
-| **Dual Licensing** | [`examples/04-dual-licensing/`](examples/04-dual-licensing/) | Dual Apache-2.0 / MIT licensing notices and SPDX expressions |
-| **Git Pre-Commit Hook** | [`examples/05-git-pre-commit-hook/`](examples/05-git-pre-commit-hook/) | Automated clone of `fatih/color` showing failure, diff preview, and auto-fix on commit |
+### From Source
+```bash
+cargo install --path .
+```
 
 ---
 
