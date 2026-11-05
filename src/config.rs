@@ -119,6 +119,10 @@ pub struct LanguageRule {
     pub preserve_xml_prolog: bool,
     #[serde(default)]
     pub template: Option<String>,
+    #[serde(default = "default_true")]
+    pub fixable: bool,
+    #[serde(default)]
+    pub keywords: Option<Vec<String>>,
 }
 
 fn default_true() -> bool {
@@ -227,6 +231,8 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             preserve_shebang: true,
             preserve_xml_prolog: false,
             template: None,
+            fixable: true,
+            keywords: None,
         },
         LanguageRule {
             name: "hash_line".to_string(),
@@ -252,6 +258,8 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             preserve_shebang: true,
             preserve_xml_prolog: false,
             template: None,
+            fixable: true,
+            keywords: None,
         },
         LanguageRule {
             name: "xml_block".to_string(),
@@ -272,6 +280,8 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             preserve_shebang: false,
             preserve_xml_prolog: true,
             template: None,
+            fixable: true,
+            keywords: None,
         },
         LanguageRule {
             name: "sql_double_dash".to_string(),
@@ -285,6 +295,8 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             preserve_shebang: false,
             preserve_xml_prolog: false,
             template: None,
+            fixable: true,
+            keywords: None,
         },
     ]
 }
@@ -368,5 +380,25 @@ comment_prefix = "// "
         config.merge_rules();
         assert_eq!(config.rules.len(), 1);
         assert_eq!(config.rules[0].name, "zig");
+    }
+
+    #[test]
+    fn test_rule_fixable_and_keywords() {
+        let toml_str = r##"
+[[rules]]
+name = "shell_docs"
+extensions = ["sh"]
+style = "line"
+comment_prefix = "# "
+fixable = false
+keywords = ["Usage:", "Synopsis:"]
+"##;
+        let config: Config = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.rules.len(), 1);
+        assert!(!config.rules[0].fixable);
+        assert_eq!(
+            config.rules[0].keywords.as_deref(),
+            Some(&["Usage:".to_string(), "Synopsis:".to_string()][..])
+        );
     }
 }

@@ -73,11 +73,32 @@ impl Formatter {
         rule: &LanguageRule,
         config: &Config,
     ) -> Result<FormatResult, Box<dyn std::error::Error>> {
+        let lines: Vec<&str> = content.lines().collect();
+
+        // Check-only keyword validation rule (when rule defines keywords but no template)
+        if rule.keywords.is_some() && rule.template.is_none() {
+            let existing_header_range = Self::find_existing_header_range(&lines, rule, config);
+            if existing_header_range.is_some() {
+                return Ok(FormatResult::Unchanged);
+            }
+            let kw_list = rule
+                .keywords
+                .as_ref()
+                .map(|k| k.join(", "))
+                .unwrap_or_default();
+            let diff = format!(
+                "Missing required header comment containing: [{}] (rule '{}' is check-only)",
+                kw_list, rule.name
+            );
+            return Ok(FormatResult::Changed {
+                new_content: content.to_string(),
+                diff,
+            });
+        }
+
         let uses_crlf = content.contains("\r\n");
         let eol = if uses_crlf { "\r\n" } else { "\n" };
         let canonical_header = Self::render_header(config, rule, path, content, eol)?;
-
-        let lines: Vec<&str> = content.lines().collect();
 
         // 1. Detect if an existing header is present in the first ~40 lines
         let existing_header_range = Self::find_existing_header_range(&lines, rule, config);
@@ -204,6 +225,18 @@ impl Formatter {
         }
 
         let max_search = lines.len().min(40);
+        let default_keywords = &config.header.keywords;
+        let keywords: &[String] = rule
+            .keywords
+            .as_deref()
+            .unwrap_or(default_keywords.as_slice());
+        let contains_keyword = |text: &str| -> bool {
+            if keywords.is_empty() {
+                true
+            } else {
+                keywords.iter().any(|k| text.contains(&k.to_lowercase()))
+            }
+        };
 
         match rule.style {
             CommentStyle::Block => {
@@ -238,12 +271,7 @@ impl Formatter {
                     if in_block && trimmed.ends_with(end_token) {
                         if let Some(s) = start_idx {
                             let block_text = lines[s..=i].join("\n").to_lowercase();
-                            if config
-                                .header
-                                .keywords
-                                .iter()
-                                .any(|k| block_text.contains(&k.to_lowercase()))
-                            {
+                            if contains_keyword(&block_text) {
                                 return Some((s, i + 1));
                             }
                         }
@@ -277,12 +305,7 @@ impl Formatter {
                     } else if in_comment {
                         if let Some(s) = start_idx {
                             let block_text = lines[s..i].join("\n").to_lowercase();
-                            if config
-                                .header
-                                .keywords
-                                .iter()
-                                .any(|k| block_text.contains(&k.to_lowercase()))
-                            {
+                            if contains_keyword(&block_text) {
                                 return Some((s, i));
                             }
                         }
@@ -299,12 +322,7 @@ impl Formatter {
                 if in_comment {
                     if let Some(s) = start_idx {
                         let block_text = lines[s..max_search].join("\n").to_lowercase();
-                        if config
-                            .header
-                            .keywords
-                            .iter()
-                            .any(|k| block_text.contains(&k.to_lowercase()))
-                        {
+                        if contains_keyword(&block_text) {
                             return Some((s, max_search));
                         }
                     }
@@ -573,6 +591,42 @@ mod tests {
                 assert!(new_content.contains("# Greeting: Hello from Command"));
             }
             _ => panic!("Expected Changed with custom command variable"),
+        }
+    }
+
+    #[test]
+    fn test_check_only_rule_keywords() {
+        let mut check_rule = default_language_rules()
+            .into_iter()
+            .find(|r| r.name == "hash_line")
+            .unwrap();
+        check_rule.name = "shell_usage".into();
+        check_rule.fixable = false;
+        check_rule.keywords = Some(vec!["usage:".into(), "synopsis:".into()]);
+        check_rule.template = None;
+
+        let config = Config::default();
+
+        // 1. File with usage header comment passes
+        let valid_script =
+            "#!/bin/bash\n# Usage: deploy.sh [options]\n# Deploys code\n\necho deploy\n";
+        let res_valid =
+            Formatter::format_file(Path::new("deploy.sh"), valid_script, &check_rule, &config)
+                .unwrap();
+        assert_eq!(res_valid, FormatResult::Unchanged);
+
+        // 2. File without usage header comment fails check
+        let missing_script = "#!/bin/bash\n\necho deploy\n";
+        let res_missing =
+            Formatter::format_file(Path::new("deploy.sh"), missing_script, &check_rule, &config)
+                .unwrap();
+        match res_missing {
+            FormatResult::Changed { diff, new_content } => {
+                assert!(diff.contains("Missing required header comment"));
+                assert!(diff.contains("usage:, synopsis:"));
+                assert_eq!(new_content, missing_script);
+            }
+            _ => panic!("Expected Changed for missing usage header"),
         }
     }
 }

@@ -50,7 +50,7 @@ fn test_cli_check_gcc_and_sarif_formats() {
         .assert()
         .failure()
         .stdout(predicate::str::contains(
-            "main.py:1:1: error: Missing or outdated file header [headercraft]",
+            "main.py:1:1: error: Missing or outdated file header [hash_line]",
         ));
 
     // Check with SARIF format
@@ -136,4 +136,70 @@ fn test_cli_crlf_file_workflow() {
         .args(["check", "Windows.java"])
         .assert()
         .success();
+}
+
+#[test]
+fn test_cli_check_only_rule_workflow() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("headercraft.toml");
+    let config_toml = r##"
+[[rules]]
+name = "shell_usage"
+extensions = ["sh"]
+style = "line"
+comment_prefix = "# "
+fixable = false
+keywords = ["Usage:", "SYNOPSIS"]
+"##;
+    fs::write(&config_path, config_toml).unwrap();
+
+    let script_file = dir.path().join("deploy.sh");
+    fs::write(&script_file, "#!/bin/bash\necho deploy\n").unwrap();
+
+    // 1. check fails with manual fix required note
+    let mut cmd_check = Command::cargo_bin("headercraft").unwrap();
+    cmd_check
+        .current_dir(dir.path())
+        .args(["check", "--format", "gcc", "deploy.sh"])
+        .assert()
+        .failure()
+        .stdout(predicate::str::contains(
+            "deploy.sh:1:1: error: Missing or outdated file header (manual fix required) [shell_usage]",
+        ));
+
+    // 2. diff skips check-only rule
+    let mut cmd_diff = Command::cargo_bin("headercraft").unwrap();
+    cmd_diff
+        .current_dir(dir.path())
+        .args(["diff", "deploy.sh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::is_empty());
+
+    // 3. fix refuses to auto-fix and outputs manual fix required
+    let mut cmd_fix = Command::cargo_bin("headercraft").unwrap();
+    cmd_fix
+        .current_dir(dir.path())
+        .args(["fix", "deploy.sh"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "Manual fix required: deploy.sh (rule 'shell_usage' is check-only)",
+        ));
+
+    // 4. Manually add usage header
+    fs::write(
+        &script_file,
+        "#!/bin/bash\n# Usage: deploy.sh --env <env>\n\necho deploy\n",
+    )
+    .unwrap();
+
+    // 5. check now succeeds
+    let mut cmd_check_after = Command::cargo_bin("headercraft").unwrap();
+    cmd_check_after
+        .current_dir(dir.path())
+        .args(["check", "deploy.sh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All files have valid headers."));
 }

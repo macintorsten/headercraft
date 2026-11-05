@@ -5,12 +5,12 @@ name = "headercraft"
 version = "0.1.0"
 edition = "2021"
 authors = ["Markus Johansson"]
-description = "High-performance, pluggable file header scanner, validator, and formatter in Rust"
+description = "High-performance file preamble validator, metadata linter, and header formatter in Rust"
 readme = "README.md"
 license = "Apache-2.0"
 repository = "https://github.com/macintorsten/headercraft"
 homepage = "https://github.com/macintorsten/headercraft"
-keywords = ["license", "header", "copyright", "linter", "pre-commit"]
+keywords = ["header", "linter", "preamble", "pre-commit", "license"]
 categories = ["command-line-utilities", "development-tools"]
 
 [dependencies]

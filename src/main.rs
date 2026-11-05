@@ -126,6 +126,10 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
                     continue;
                 };
 
+                if !rule.fixable {
+                    continue;
+                }
+
                 if let Ok(FormatResult::Changed { diff, .. }) =
                     Formatter::format_file(&path, &content, rule, &cfg)
                 {
@@ -146,6 +150,7 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
             let target_files = discover_files(&files, &cfg);
             let classifier = Classifier::new(&cfg.rules);
             let mut modified_count = 0;
+            let mut manual_fix_count = 0;
 
             for path in target_files {
                 let Ok(content) = fs::read_to_string(&path) else {
@@ -158,6 +163,15 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
                 if let Ok(FormatResult::Changed { new_content, .. }) =
                     Formatter::format_file(&path, &content, rule, &cfg)
                 {
+                    if !rule.fixable {
+                        eprintln!(
+                            "Manual fix required: {} (rule '{}' is check-only)",
+                            path.display(),
+                            rule.name
+                        );
+                        manual_fix_count += 1;
+                        continue;
+                    }
                     if let Err(e) = fs::write(&path, new_content) {
                         eprintln!("Error writing {}: {}", path.display(), e);
                     } else {
@@ -167,8 +181,16 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
                 }
             }
 
-            println!("Fixed {} file(s).", modified_count);
-            ExitCode::SUCCESS
+            if manual_fix_count > 0 {
+                println!(
+                    "Fixed {} file(s) ({} file(s) require manual fix).",
+                    modified_count, manual_fix_count
+                );
+                ExitCode::from(1)
+            } else {
+                println!("Fixed {} file(s).", modified_count);
+                ExitCode::SUCCESS
+            }
         }
 
         Commands::Check {
@@ -179,7 +201,7 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
             let cfg = Config::load_or_default(config.as_deref());
             let target_files = discover_files(&files, &cfg);
             let classifier = Classifier::new(&cfg.rules);
-            let mut violations: Vec<(PathBuf, String)> = Vec::new();
+            let mut violations: Vec<(PathBuf, String, String, bool)> = Vec::new();
 
             for path in target_files {
                 let Ok(content) = fs::read_to_string(&path) else {
@@ -192,7 +214,7 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
                 if let Ok(FormatResult::Changed { diff, .. }) =
                     Formatter::format_file(&path, &content, rule, &cfg)
                 {
-                    violations.push((path, diff));
+                    violations.push((path, diff, rule.name.clone(), rule.fixable));
                 }
             }
 
@@ -205,28 +227,49 @@ excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
 
             match format {
                 OutputFormat::Gcc => {
-                    for (path, _) in &violations {
-                        // Output GCC format compatible with hk
+                    for (path, _, rule_name, fixable) in &violations {
+                        let note = if *fixable {
+                            ""
+                        } else {
+                            " (manual fix required)"
+                        };
                         println!(
-                            "{}:1:1: error: Missing or outdated file header [headercraft]",
-                            path.display()
+                            "{}:1:1: error: Missing or outdated file header{} [{}]",
+                            path.display(),
+                            note,
+                            rule_name
                         );
                     }
                 }
                 OutputFormat::Human => {
                     eprintln!("Header violations found in {} file(s):\n", violations.len());
-                    for (path, diff) in &violations {
-                        eprintln!("--- {} ---", path.display());
+                    for (path, diff, rule_name, fixable) in &violations {
+                        let fix_msg = if *fixable {
+                            "auto-fixable"
+                        } else {
+                            "manual fix required"
+                        };
+                        eprintln!(
+                            "--- {} [rule: {}, {}] ---",
+                            path.display(),
+                            rule_name,
+                            fix_msg
+                        );
                         eprintln!("{}", diff);
                     }
                 }
                 OutputFormat::Sarif => {
                     let results: Vec<_> = violations
                         .iter()
-                        .map(|(p, _)| {
+                        .map(|(p, _, rule_name, fixable)| {
+                            let msg = if *fixable {
+                                "Missing or outdated file header"
+                            } else {
+                                "Missing or outdated file header (manual fix required)"
+                            };
                             json!({
-                                "ruleId": "headercraft",
-                                "message": { "text": "Missing or outdated file header" },
+                                "ruleId": rule_name,
+                                "message": { "text": msg },
                                 "locations": [{
                                     "physicalLocation": {
                                         "artifactLocation": { "uri": p.to_string_lossy() },
