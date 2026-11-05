@@ -88,11 +88,13 @@ fn main() -> ExitCode {
 template = """
 {% set start_year = vars.start_year | default(git.created_year) | default(now.year) -%}
 Copyright (c) {{ start_year }}{% if start_year | string != now.year | string %}-{{ now.year }}{% endif %} {{ vars.owner | default(props.owner) | default('Acme Corp') }}. All rights reserved.
+SPDX-License-Identifier: {{ props.license }}
 """
 
 # Regex with named capture groups to extract existing metadata from file headers
 extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
 
+# Custom user-defined properties available in templates as {{ props.<name> }}
 [props]
 owner = "Acme Corp"
 license = "Apache-2.0"
