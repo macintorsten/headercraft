@@ -66,7 +66,9 @@ pub fn extract_git_metadata(file_path: &Path, enabled: bool) -> GitMetadata {
                 .and_then(|out| {
                     if out.status.success() {
                         let text = String::from_utf8_lossy(&out.stdout);
-                        text.lines().last().and_then(|l| l.trim().parse::<u32>().ok())
+                        text.lines()
+                            .last()
+                            .and_then(|l| l.trim().parse::<u32>().ok())
                     } else {
                         None
                     }
