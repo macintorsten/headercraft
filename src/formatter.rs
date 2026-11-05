@@ -30,7 +30,7 @@ impl Formatter {
         let tmpl = env.get_template("header")?;
 
         let ctx = Extractor::build_context(path, content, config);
-        let rendered_text = tmpl.render(ctx)?;
+        let rendered_text = tmpl.render(minijinja::value::Serde(ctx))?;
 
         Ok(Self::wrap_comment(rule, &rendered_text, eol))
     }
