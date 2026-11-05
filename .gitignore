@@ -1,8 +1,11 @@
-/target
+target/
 **/*.rs.bk
 *.swp
 *.bak
 .DS_Store
 .mise.local.toml
 .cache/
+**/.git/hk/
+*.log
+
 

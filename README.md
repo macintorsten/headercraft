@@ -1,5 +1,10 @@
 # HeaderCraft (`hdr`)
 
+[![CI](https://github.com/macintorsten/headercraft/actions/workflows/ci.yml/badge.svg)](https://github.com/macintorsten/headercraft/actions/workflows/ci.yml)
+[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
+[![Rust: 2021](https://img.shields.io/badge/Rust-2021_Edition-orange.svg)](https://www.rust-lang.org)
+[![Hook: hk compatible](https://img.shields.io/badge/Hook-hk_compatible-brightgreen.svg)](https://github.com/jdx/hk)
+
 A high-performance, pluggable file header scanner, validator, and formatter written in **Rust**, designed for sub-5ms pre-commit execution and native integration with [`hk`](https://github.com/jdx/hk) and [`mise`](https://mise.jdx.dev).
 
 ---
@@ -227,6 +232,30 @@ headercraft fix
 
 ---
 
+### Template Variables Reference
+
+Templates have access to five distinct variable namespaces in MiniJinja:
+
+| Namespace | Variable | Type | Description |
+|---|---|---|---|
+| **`vars.*`** | `vars.<name>` | `string` | Named capture groups from `extract_regex` (e.g. `vars.start_year`, `vars.owner`). Highest precedence. |
+| **`git.*`** | `git.created_year` | `integer` | First commit year where file was added (`git log --diff-filter=A`). |
+| | `git.modified_year` | `integer` | Last commit year for the file (`git log -1`). |
+| | `git.author` | `string` | Initial committing author name. |
+| | `git.is_dirty` | `boolean` | `true` if file has uncommitted changes in working tree / index. |
+| **`fs.*`** | `fs.filename` | `string` | Full filename including extension (e.g. `main.rs`). |
+| | `fs.stem` | `string` | Filename without extension (e.g. `main`). |
+| | `fs.extension` | `string` | File extension without dot (e.g. `rs`). |
+| | `fs.dir` | `string` | Parent directory path. |
+| | `fs.mtime_year` | `integer` | Filesystem modification year. |
+| **`now.*`** | `now.year` | `integer` | Current wall-clock year (e.g. `2026`). |
+| | `now.date` | `string` | Current date formatted as `YYYY-MM-DD`. |
+| | `now.iso` | `string` | RFC-3339 timestamp. |
+| **`props.*`** | `props.<key>` | `any` | User-defined properties configured under `[props]` in `headercraft.toml`. |
+| **`cmd.*`** | `cmd.<name>` | `string` | Stdout output from external commands configured under `[commands]` in `headercraft.toml`. |
+
+---
+
 ## Configuration (`headercraft.toml`)
 
 ```toml
@@ -358,6 +387,20 @@ run = "cargo fmt -- --check && cargo clippy --all-targets -- -D warnings && carg
 description = "Run pre-commit hook via hk"
 run = "hk run pre-commit"
 ```
+
+---
+
+## Interactive Examples & Scenarios
+
+The repository includes five ready-to-test scenarios under [`examples/`](examples/):
+
+| Scenario | Directory | Focus Area |
+|---|---|---|
+| **SPDX Migration** | [`examples/01-spdx-migration/`](examples/01-spdx-migration/) | Migrating legacy verbose copyright boilerplate to compact SPDX tags |
+| **Corporate Confidentiality** | [`examples/02-corporate-confidential/`](examples/02-corporate-confidential/) | Enforcing proprietary security classification banners and XML prolog handling |
+| **Generated Code Stamping** | [`examples/03-generated-code/`](examples/03-generated-code/) | Deterministic `@generated - DO NOT EDIT` provenance without timestamp churn |
+| **Dual Licensing** | [`examples/04-dual-licensing/`](examples/04-dual-licensing/) | Dual Apache-2.0 / MIT licensing notices and SPDX expressions |
+| **Git Pre-Commit Hook** | [`examples/05-git-pre-commit-hook/`](examples/05-git-pre-commit-hook/) | Automated clone of `fatih/color` showing failure, diff preview, and auto-fix on commit |
 
 ---
 
