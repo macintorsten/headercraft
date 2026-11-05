@@ -109,3 +109,31 @@ fn test_cli_diff_and_fix_workflow() {
         .success()
         .stdout(predicate::str::contains("All files have valid headers."));
 }
+
+#[test]
+fn test_cli_crlf_file_workflow() {
+    let dir = tempdir().unwrap();
+    let win_file = dir.path().join("Windows.java");
+    let crlf_content = "package com.win;\r\n\r\npublic class Windows {}\r\n";
+    fs::write(&win_file, crlf_content).unwrap();
+
+    // 1. fix preserves CRLF
+    let mut cmd_fix = Command::cargo_bin("headercraft").unwrap();
+    cmd_fix
+        .current_dir(dir.path())
+        .args(["fix", "Windows.java"])
+        .assert()
+        .success();
+
+    let fixed = fs::read_to_string(&win_file).unwrap();
+    assert!(fixed.contains("\r\n"));
+    assert!(!fixed.replace("\r\n", "").contains('\n'));
+
+    // 2. check succeeds without false diff
+    let mut cmd_check = Command::cargo_bin("headercraft").unwrap();
+    cmd_check
+        .current_dir(dir.path())
+        .args(["check", "Windows.java"])
+        .assert()
+        .success();
+}

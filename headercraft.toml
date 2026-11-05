@@ -20,4 +20,4 @@ enabled = true
 
 [files]
 includes = ["**/*"]
-excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**"]
+excludes = ["target/**", "build/**", ".cache/**", ".git/**", "node_modules/**", "examples/**"]

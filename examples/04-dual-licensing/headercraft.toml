@@ -1,0 +1,15 @@
+[header]
+template = """
+{% set start = vars.start_year | default(git.created_year) | default(now.year) -%}
+Copyright (c) {{ start }}{% if start | string != now.year | string %}-{{ now.year }}{% endif %} {{ vars.owner | default(props.owner) | default('Project Contributors') }}
+Licensed under either of Apache License 2.0 or MIT license at your option.
+SPDX-License-Identifier: MIT OR Apache-2.0
+"""
+extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
+
+[props]
+owner = "Rust Ecosystem Contributors"
+
+[files]
+includes = ["**/*"]
+excludes = ["target/**"]

@@ -15,7 +15,7 @@ steps {
 
   ["headers"] = new Step {
     glob = "**/*.{rs,toml,sh}"
-    exclude = List("Cargo.lock", "target/**")
+    exclude = List("Cargo.lock", "target/**", "examples/**")
     check = "cargo run --quiet -- check --format gcc {{files}}"
     fix = "cargo run --quiet -- fix {{files}}"
     check_diff = "cargo run --quiet -- diff {{files}}"

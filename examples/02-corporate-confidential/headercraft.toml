@@ -1,0 +1,18 @@
+[header]
+template = """
+{% set start = vars.start_year | default(git.created_year) | default(now.year) -%}
+{{ props.classification }}
+Copyright (c) {{ start }}{% if start | string != now.year | string %}-{{ now.year }}{% endif %} {{ props.company }}. All rights reserved.
+Unauthorized copying or distribution is strictly prohibited.
+Contact: {{ props.contact }}
+"""
+extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?'
+
+[props]
+company = "Globex Financial GmbH"
+classification = "CONFIDENTIAL - PROPRIETARY INTERNAL USE ONLY"
+contact = "security@globex.example"
+
+[files]
+includes = ["**/*"]
+excludes = ["target/**"]

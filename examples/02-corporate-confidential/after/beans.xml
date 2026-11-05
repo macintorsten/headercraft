@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  CONFIDENTIAL - PROPRIETARY INTERNAL USE ONLY
+  Copyright (c) 2017-2026 Globex Financial GmbH. All rights reserved.
+  Unauthorized copying or distribution is strictly prohibited.
+  Contact: security@globex.example
+-->
+<beans xmlns="http://www.springframework.org/schema/beans">
+</beans>

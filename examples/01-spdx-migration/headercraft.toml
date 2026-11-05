@@ -1,0 +1,15 @@
+[header]
+template = """
+{% set start = vars.start_year | default(git.created_year) | default(now.year) -%}
+SPDX-FileCopyrightText: {{ start }}{% if start | string != now.year | string %}-{{ now.year }}{% endif %} {{ vars.owner | default(props.owner) | default('Acme Corp.') }}
+SPDX-License-Identifier: {{ props.spdx_id }}
+"""
+extract_regex = '(?i)(?:SPDX-FileCopyrightText:|copyright\s+(?:\(c\)\s+)?)(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
+
+[props]
+owner = "Acme Corp."
+spdx_id = "Apache-2.0"
+
+[files]
+includes = ["**/*"]
+excludes = ["target/**", "node_modules/**"]
