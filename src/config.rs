@@ -13,9 +13,13 @@ pub struct Config {
     #[serde(default)]
     pub props: HashMap<String, serde_json::Value>,
     #[serde(default)]
+    pub commands: HashMap<String, String>,
+    #[serde(default)]
     pub git: GitConfig,
     #[serde(default)]
     pub files: FilesConfig,
+    #[serde(default = "default_true")]
+    pub inherit_default_rules: bool,
     #[serde(default)]
     pub rules: Vec<LanguageRule>,
 }
@@ -113,6 +117,8 @@ pub struct LanguageRule {
     pub preserve_shebang: bool,
     #[serde(default = "default_true")]
     pub preserve_xml_prolog: bool,
+    #[serde(default)]
+    pub template: Option<String>,
 }
 
 fn default_true() -> bool {
@@ -123,7 +129,7 @@ impl Config {
     pub fn load_from_file(path: &Path) -> Result<Self, Box<dyn std::error::Error>> {
         let content = std::fs::read_to_string(path)?;
         let mut config: Config = toml::from_str(&content)?;
-        config.merge_default_rules_if_empty();
+        config.merge_rules();
         Ok(config)
     }
 
@@ -146,18 +152,30 @@ impl Config {
         let mut cfg = Config {
             header: HeaderConfig::default(),
             props: HashMap::new(),
+            commands: HashMap::new(),
             git: GitConfig::default(),
             files: FilesConfig::default(),
+            inherit_default_rules: true,
             rules: Vec::new(),
         };
-        cfg.merge_default_rules_if_empty();
+        cfg.merge_rules();
         cfg
     }
 
-    pub fn merge_default_rules_if_empty(&mut self) {
-        if self.rules.is_empty() {
-            self.rules = default_language_rules();
+    pub fn merge_rules(&mut self) {
+        if !self.inherit_default_rules {
+            return;
         }
+        let defaults = default_language_rules();
+        for default_rule in defaults {
+            if !self.rules.iter().any(|r| r.name == default_rule.name) {
+                self.rules.push(default_rule);
+            }
+        }
+    }
+
+    pub fn merge_default_rules_if_empty(&mut self) {
+        self.merge_rules();
     }
 }
 
@@ -166,11 +184,13 @@ impl Default for Config {
         let mut cfg = Self {
             header: HeaderConfig::default(),
             props: HashMap::new(),
+            commands: HashMap::new(),
             git: GitConfig::default(),
             files: FilesConfig::default(),
+            inherit_default_rules: true,
             rules: Vec::new(),
         };
-        cfg.merge_default_rules_if_empty();
+        cfg.merge_rules();
         cfg
     }
 }
@@ -206,6 +226,7 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             comment_end: Some(" */".into()),
             preserve_shebang: true,
             preserve_xml_prolog: false,
+            template: None,
         },
         LanguageRule {
             name: "hash_line".to_string(),
@@ -230,6 +251,7 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             comment_end: None,
             preserve_shebang: true,
             preserve_xml_prolog: false,
+            template: None,
         },
         LanguageRule {
             name: "xml_block".to_string(),
@@ -249,6 +271,7 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             comment_end: Some("-->".into()),
             preserve_shebang: false,
             preserve_xml_prolog: true,
+            template: None,
         },
         LanguageRule {
             name: "sql_double_dash".to_string(),
@@ -261,6 +284,7 @@ pub fn default_language_rules() -> Vec<LanguageRule> {
             comment_end: None,
             preserve_shebang: false,
             preserve_xml_prolog: false,
+            template: None,
         },
     ]
 }
@@ -311,5 +335,38 @@ comment_prefix = "// "
         assert_eq!(config.files.includes, vec!["src/**"]);
         assert_eq!(config.rules.len(), 1);
         assert_eq!(config.rules[0].name, "custom_lang");
+    }
+
+    #[test]
+    fn test_rule_inheritance() {
+        let toml_str = r##"
+[[rules]]
+name = "elixir"
+extensions = ["ex", "exs"]
+style = "line"
+comment_prefix = "# "
+"##;
+        let mut config: Config = toml::from_str(toml_str).unwrap();
+        config.merge_rules();
+        assert!(config.rules.iter().any(|r| r.name == "elixir"));
+        assert!(config.rules.iter().any(|r| r.name == "c_style_block"));
+        assert!(config.rules.iter().any(|r| r.name == "hash_line"));
+    }
+
+    #[test]
+    fn test_rule_inheritance_disabled() {
+        let toml_str = r#"
+inherit_default_rules = false
+
+[[rules]]
+name = "zig"
+extensions = ["zig"]
+style = "line"
+comment_prefix = "// "
+"#;
+        let mut config: Config = toml::from_str(toml_str).unwrap();
+        config.merge_rules();
+        assert_eq!(config.rules.len(), 1);
+        assert_eq!(config.rules[0].name, "zig");
     }
 }

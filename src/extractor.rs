@@ -71,11 +71,26 @@ impl Extractor {
             fs_map.insert("mtime_year".to_string(), json!(y));
         }
 
+        // 4. Custom command outputs
+        let mut cmd_map = serde_json::Map::new();
+        for (key, cmd_str) in &config.commands {
+            if let Ok(out) = std::process::Command::new("sh")
+                .args(["-c", cmd_str])
+                .output()
+            {
+                if out.status.success() {
+                    let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                    cmd_map.insert(key.clone(), json!(val));
+                }
+            }
+        }
+
         // Build comprehensive JSON context for MiniJinja
         json!({
             "vars": vars,
             "git": Value::Object(git_map),
             "fs": Value::Object(fs_map),
+            "cmd": Value::Object(cmd_map),
             "now": {
                 "year": now_year,
                 "date": now_date,

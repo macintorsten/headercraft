@@ -3,12 +3,12 @@
 
 [header]
 template = """
-{% set start = git.created_year | default(now.year) -%}
+{% set start = vars.start_year | default(git.created_year | default(now.year)) -%}
 Copyright (c) {{ start }}{% if start != now.year %}-{{ now.year }}{% endif %} {{ props.owner }}.
 SPDX-License-Identifier: {{ props.license }}
 """
 
-# Extract existing start year from files if git is not available
+# Extract existing metadata from file headers (takes highest precedence over Git history)
 extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
 
 [props]

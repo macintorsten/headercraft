@@ -24,8 +24,9 @@ impl Formatter {
         content: &str,
         eol: &str,
     ) -> Result<String, Box<dyn std::error::Error>> {
+        let template_text = rule.template.as_deref().unwrap_or(&config.header.template);
         let mut env = Environment::new();
-        env.add_template("header", &config.header.template)?;
+        env.add_template("header", template_text)?;
         let tmpl = env.get_template("header")?;
 
         let ctx = Extractor::build_context(path, content, config);
@@ -528,6 +529,50 @@ mod tests {
                 assert!(new_content.ends_with('\n'));
             }
             _ => panic!("Expected Changed for empty file"),
+        }
+    }
+
+    #[test]
+    fn test_per_rule_template_override() {
+        let mut py_rule = default_language_rules()
+            .into_iter()
+            .find(|r| r.name == "hash_line")
+            .unwrap();
+        py_rule.template = Some("Custom Python Header for {{ fs.filename }}".into());
+
+        let config = Config::default();
+        let res =
+            Formatter::format_file(Path::new("app.py"), "print(1)\n", &py_rule, &config).unwrap();
+
+        match res {
+            FormatResult::Changed { new_content, .. } => {
+                assert!(new_content.starts_with("# Custom Python Header for app.py"));
+            }
+            _ => panic!("Expected Changed with custom rule template"),
+        }
+    }
+
+    #[test]
+    fn test_custom_command_variable() {
+        let py_rule = default_language_rules()
+            .into_iter()
+            .find(|r| r.name == "hash_line")
+            .unwrap();
+
+        let mut config = Config::default();
+        config
+            .commands
+            .insert("greet".into(), "echo 'Hello from Command'".into());
+        config.header.template = "Greeting: {{ cmd.greet }}".into();
+
+        let res =
+            Formatter::format_file(Path::new("test.py"), "x = 1\n", &py_rule, &config).unwrap();
+
+        match res {
+            FormatResult::Changed { new_content, .. } => {
+                assert!(new_content.contains("# Greeting: Hello from Command"));
+            }
+            _ => panic!("Expected Changed with custom command variable"),
         }
     }
 }
