@@ -1,0 +1,20 @@
+# HeaderCraft Configuration: Synchronizing Script Headers with CLI --help Output
+
+[commands]
+# Executes the target shell script with --help to dynamically extract its CLI usage
+help = "bash {file} --help"
+
+[[rules]]
+name = "script_help_sync"
+extensions = ["sh", "bash"]
+style = "line"
+comment_prefix = "# "
+template = """
+Synopsis & Usage:
+{{ cmd.help }}
+"""
+keywords = ["Synopsis & Usage:"]
+
+[files]
+includes = ["**/*.sh"]
+excludes = ["target/**", ".git/**"]
