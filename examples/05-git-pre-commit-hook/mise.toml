@@ -1,0 +1,20 @@
+# Mise configuration for git pre-commit hook demo
+
+[tools]
+hk = "2.11.0"
+
+[tasks.check]
+description = "Check file headers with hk and headercraft (fails on missing/invalid headers)"
+run = "hk check --all"
+
+[tasks.fix]
+description = "Auto-fix all file headers with headercraft using git commit history"
+run = "hk fix --all"
+
+[tasks.diff]
+description = "Preview header unified diff across all files"
+run = "hdr diff $(git ls-files '*.go')"
+
+[tasks."install-hook"]
+description = "Install git pre-commit hook into local repo"
+run = "hk install --force-local --legacy"

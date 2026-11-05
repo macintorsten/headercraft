@@ -1,0 +1,13 @@
+amends "package://github.com/jdx/hk/releases/download/v2.11.0/hk@2.11.0#/Config.pkl"
+
+steps {
+  ["headers"] = new Step {
+    glob = "**/*.go"
+    exclude = List("vendor/**")
+    check = "headercraft check --format gcc {{files}}"
+    fix = "headercraft fix {{files}}"
+    check_diff = "headercraft diff {{files}}"
+    diagnostic_format = "gcc"
+    diagnostic_tool = "headercraft"
+  }
+}

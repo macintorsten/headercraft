@@ -1,0 +1,30 @@
+# HeaderCraft Configuration for Git-Backed Pre-Commit Hook
+# Resolves inception year from Git history and maintains current year ranges.
+
+[header]
+template = """
+{% set start = git.created_year | default(now.year) -%}
+Copyright (c) {{ start }}{% if start != now.year %}-{{ now.year }}{% endif %} {{ props.owner }}.
+SPDX-License-Identifier: {{ props.license }}
+"""
+
+# Extract existing start year from files if git is not available
+extract_regex = '(?i)copyright\s+(?:\(c\)\s+)?(?P<start_year>\d{4})(?:-(?P<end_year>\d{4}))?\s+(?P<owner>[^\n\.\,]+)'
+
+[props]
+owner = "Fatih Arslan and Color Contributors"
+license = "MIT"
+
+[git]
+enabled = true
+
+[files]
+includes = ["**/*.go"]
+excludes = ["vendor/**", "node_modules/**"]
+
+# Language-specific syntax rules
+[[rules]]
+name = "go"
+extensions = ["go"]
+style = "line"
+comment_prefix = "// "
