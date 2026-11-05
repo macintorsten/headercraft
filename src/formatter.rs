@@ -562,7 +562,7 @@ mod tests {
         let mut config = Config::default();
         config
             .commands
-            .insert("greet".into(), "echo 'Hello from Command'".into());
+            .insert("greet".into(), "echo Hello from Command".into());
         config.header.template = "Greeting: {{ cmd.greet }}".into();
 
         let res =

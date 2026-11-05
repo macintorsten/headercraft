@@ -74,10 +74,17 @@ impl Extractor {
         // 4. Custom command outputs
         let mut cmd_map = serde_json::Map::new();
         for (key, cmd_str) in &config.commands {
-            if let Ok(out) = std::process::Command::new("sh")
+            #[cfg(target_os = "windows")]
+            let cmd_output = std::process::Command::new("cmd")
+                .args(["/C", cmd_str])
+                .output();
+
+            #[cfg(not(target_os = "windows"))]
+            let cmd_output = std::process::Command::new("sh")
                 .args(["-c", cmd_str])
-                .output()
-            {
+                .output();
+
+            if let Ok(out) = cmd_output {
                 if out.status.success() {
                     let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
                     cmd_map.insert(key.clone(), json!(val));
