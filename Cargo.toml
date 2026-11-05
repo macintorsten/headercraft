@@ -1,0 +1,25 @@
+# Copyright (c) 2026 Acme Corp. All rights reserved.
+
+[package]
+name = "headercraft"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+clap = { version = "4.5", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+toml = "0.8"
+minijinja = { version = "2.7", features = ["json"] }
+regex = "1.11"
+ignore = "0.4"
+chrono = "0.4"
+similar = "2.7"
+glob = "0.3"
+
+[dev-dependencies]
+tempfile = "3.17"
+assert_cmd = "2.0"
+predicates = "3.1"
+
+

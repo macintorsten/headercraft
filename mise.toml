@@ -1,0 +1,41 @@
+# Copyright (c) 2026 Acme Corp. All rights reserved.
+
+[tools]
+rust = "stable"
+hk = "2.11.0"
+
+[tasks.build]
+description = "Build headercraft in release mode"
+run = "cargo build --release"
+
+[tasks.test]
+description = "Run all unit and integration tests"
+run = "cargo test"
+
+[tasks.fmt]
+description = "Format Rust source code"
+run = "cargo fmt"
+
+[tasks."fmt:check"]
+description = "Check formatting without modifying"
+run = "cargo fmt -- --check"
+
+[tasks.clippy]
+description = "Run clippy linter"
+run = "cargo clippy -- -D warnings"
+
+[tasks.check]
+description = "Run all checks (fmt, clippy, test)"
+depends = ["fmt:check", "clippy", "test"]
+
+[tasks."headers:check"]
+description = "Check license headers using headercraft"
+run = "cargo run --quiet -- check --format gcc"
+
+[tasks."headers:fix"]
+description = "Fix license headers using headercraft"
+run = "cargo run --quiet -- fix"
+
+[tasks.pre-commit]
+description = "Run all pre-commit hooks via hk"
+run = "hk run pre-commit"

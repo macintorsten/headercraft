@@ -1,0 +1,25 @@
+amends "package://github.com/jdx/hk/releases/download/v2.11.0/hk@2.11.0#/Config.pkl"
+
+steps {
+  ["rustfmt"] = new Step {
+    glob = "**/*.rs"
+    check = "cargo fmt -- --check"
+    fix = "cargo fmt"
+  }
+
+  ["clippy"] = new Step {
+    glob = "**/*.rs"
+    check = "cargo clippy --all-targets -- -D warnings"
+    diagnostic_format = "cargo-json"
+  }
+
+  ["headers"] = new Step {
+    glob = "**/*.{rs,toml,sh}"
+    exclude = List("Cargo.lock", "target/**")
+    check = "cargo run --quiet -- check --format gcc {{files}}"
+    fix = "cargo run --quiet -- fix {{files}}"
+    check_diff = "cargo run --quiet -- diff {{files}}"
+    diagnostic_format = "gcc"
+    diagnostic_tool = "headercraft"
+  }
+}
