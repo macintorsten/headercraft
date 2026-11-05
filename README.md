@@ -154,18 +154,28 @@ Run and test real scenarios in the [`examples/`](examples/) directory:
 
 ## Installation
 
-### Via `mise`
+### Via `mise` (from GitHub Releases)
+Add to your `mise.toml` to fetch pre-compiled binaries via `ubi`:
 ```toml
 [tools]
-"cargo:headercraft" = "latest"
+"ubi:macintorsten/headercraft" = "latest"
 ```
 
-### From Binary Releases
-Pre-compiled static binaries for Linux (x86_64, aarch64), macOS (Intel, Apple Silicon), and Windows are available on GitHub Releases.
+### From Git (Cargo)
+```bash
+cargo install --git https://github.com/macintorsten/headercraft.git
+```
 
-### From Source
+### From Local Source
 ```bash
 cargo install --path .
+```
+
+### Once Published to Crates.io
+```bash
+cargo install headercraft
+# Or in mise.toml:
+# "cargo:headercraft" = "latest"
 ```
 
 ---
