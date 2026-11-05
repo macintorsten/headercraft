@@ -71,22 +71,42 @@ impl Extractor {
             fs_map.insert("mtime_year".to_string(), json!(y));
         }
 
-        // 4. Custom command outputs
+        // 4. Custom command outputs with {file}, {path}, {filename}, {dir} placeholder substitution
         let mut cmd_map = serde_json::Map::new();
-        for (key, cmd_str) in &config.commands {
+        let path_str = path.display().to_string();
+        for (key, cmd_template) in &config.commands {
+            let cmd_str = cmd_template
+                .replace("{file}", &path_str)
+                .replace("{path}", &path_str)
+                .replace("{filename}", filename)
+                .replace("{stem}", stem)
+                .replace("{dir}", dir);
+
             #[cfg(target_os = "windows")]
             let cmd_output = std::process::Command::new("cmd")
-                .args(["/C", cmd_str])
+                .args(["/C", &cmd_str])
+                .env("HC_FILE", &path_str)
+                .env("FILE", &path_str)
                 .output();
 
             #[cfg(not(target_os = "windows"))]
             let cmd_output = std::process::Command::new("sh")
-                .args(["-c", cmd_str])
+                .args(["-c", &cmd_str])
+                .env("HC_FILE", &path_str)
+                .env("FILE", &path_str)
                 .output();
 
             if let Ok(out) = cmd_output {
-                if out.status.success() {
-                    let val = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let stdout_text = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                let val = if !stdout_text.is_empty() {
+                    stdout_text
+                } else if out.status.success() {
+                    String::from_utf8_lossy(&out.stderr).trim().to_string()
+                } else {
+                    String::new()
+                };
+
+                if !val.is_empty() {
                     cmd_map.insert(key.clone(), json!(val));
                 }
             }
@@ -143,5 +163,17 @@ mod tests {
 
         let vars = ctx.get("vars").unwrap();
         assert!(vars.as_object().unwrap().is_empty());
+    }
+
+    #[test]
+    fn test_extract_command_with_file_placeholder() {
+        let mut config = Config::default();
+        config
+            .commands
+            .insert("inspect".into(), "echo Target is {file}".into());
+
+        let ctx = Extractor::build_context(Path::new("scripts/test.sh"), "", &config);
+        let cmd = ctx.get("cmd").unwrap();
+        assert_eq!(cmd.get("inspect").unwrap(), "Target is scripts/test.sh");
     }
 }

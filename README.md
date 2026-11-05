@@ -135,9 +135,11 @@ comment_prefix = "# "
 fixable = false
 keywords = ["Usage:", "SYNOPSIS"]
 
-# Custom commands for dynamic variables: {{ cmd.git_branch }}
+# Custom commands for dynamic variables: {{ cmd.git_branch }} or {{ cmd.help }}
+# Supports {file}, {path}, {filename}, {stem}, {dir} substitutions
 [commands]
 git_branch = "git rev-parse --abbrev-ref HEAD"
+help = "bash {file} --help"
 ```
 
 ---
@@ -156,7 +158,7 @@ git_branch = "git rev-parse --abbrev-ref HEAD"
 | **`now.*`** | `now.year` | `integer` | Current wall-clock year (`2026`). |
 | | `now.date` | `string` | Current date (`YYYY-MM-DD`). |
 | **`props.*`** | `props.<key>` | `any` | Static values configured under `[props]`. |
-| **`cmd.*`** | `cmd.<name>` | `string` | Output from external commands in `[commands]`. |
+| **`cmd.*`** | `cmd.<name>` | `string` | Output from external commands in `[commands]` (supports `{file}`, `{dir}`, `{filename}`). |
 
 ---
 

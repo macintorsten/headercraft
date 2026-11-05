@@ -203,3 +203,69 @@ keywords = ["Usage:", "SYNOPSIS"]
         .success()
         .stdout(predicate::str::contains("All files have valid headers."));
 }
+
+#[test]
+fn test_cli_auto_infer_usage_from_help_command() {
+    let dir = tempdir().unwrap();
+    let config_path = dir.path().join("headercraft.toml");
+    let config_toml = r##"
+[commands]
+help = "bash {file} --help"
+
+[[rules]]
+name = "script_help_sync"
+extensions = ["sh"]
+style = "line"
+comment_prefix = "# "
+template = """
+Synopsis:
+{{ cmd.help }}
+"""
+keywords = ["Synopsis:"]
+"##;
+    fs::write(&config_path, config_toml).unwrap();
+
+    let script_file = dir.path().join("backup.sh");
+    let script_code = r#"#!/bin/bash
+if [ "$1" = "--help" ] || [ "$1" = "-h" ]; then
+    echo "Usage: backup.sh [options]"
+    echo "  --all    Backup everything"
+    exit 0
+fi
+
+echo "Doing backup..."
+"#;
+    fs::write(&script_file, script_code).unwrap();
+
+    // 1. Initially check fails (missing Synopsis header)
+    let mut cmd_check = Command::cargo_bin("headercraft").unwrap();
+    cmd_check
+        .current_dir(dir.path())
+        .args(["check", "backup.sh"])
+        .assert()
+        .failure();
+
+    // 2. fix runs `bash backup.sh --help` and auto-injects the synopsis comment
+    let mut cmd_fix = Command::cargo_bin("headercraft").unwrap();
+    cmd_fix
+        .current_dir(dir.path())
+        .args(["fix", "backup.sh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Updated header: backup.sh"));
+
+    let fixed = fs::read_to_string(&script_file).unwrap();
+    assert!(fixed.contains("# Synopsis:"));
+    assert!(fixed.contains("# Usage: backup.sh [options]"));
+    assert!(fixed.contains("#   --all    Backup everything"));
+    assert!(fixed.contains("echo \"Doing backup...\""));
+
+    // 3. check now succeeds
+    let mut cmd_check_ok = Command::cargo_bin("headercraft").unwrap();
+    cmd_check_ok
+        .current_dir(dir.path())
+        .args(["check", "backup.sh"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("All files have valid headers."));
+}
